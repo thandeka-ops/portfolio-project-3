@@ -7,20 +7,24 @@ app = Flask(__name__)
 def home():
     return jsonify({
         "application": "CI/CD Demo Application",
-        "version": "3.0.0",
-        "status": "running"
+        "status": "running",
+        "version": "3.0.0"
     })
 
 
 @app.route("/health")
 def health():
-    return jsonify({"status": "healthy"})
+    return jsonify({
+        "status": "healthy"
+    })
 
 
 @app.route("/version")
 def version():
-    return jsonify({"version": "3.0.0"})
+    return jsonify({
+        "version": "3.0.0"
+    })
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=5001)
