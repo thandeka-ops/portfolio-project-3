@@ -86,39 +86,101 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
+
           script: |
-            set -e
+            set -u
 
             VERSION="${{ needs.docker-publish.outputs.version }}"
+            NEW_IMAGE="tholiwe/portfolio-project-3:$VERSION"
+            CONTAINER="portfolio-project-3-api"
 
-            echo "Deploying Project 3 version $VERSION..."
+            echo "======================================"
+            echo "Deploying Project 3 version $VERSION"
+            echo "======================================"
 
-            echo "Pulling versioned Docker image..."
-            docker pull tholiwe/portfolio-project-3:$VERSION
+            echo "Checking current deployment..."
+
+            OLD_IMAGE=$(docker inspect "$CONTAINER" \
+              --format '{{.Config.Image}}' 2>/dev/null || true)
+
+            if [ -n "$OLD_IMAGE" ]; then
+              echo "Previous image: $OLD_IMAGE"
+            else
+              echo "No previous deployment found."
+            fi
+
+            echo "Pulling new Docker image..."
+            docker pull "$NEW_IMAGE"
+
+            rollback() {
+              echo "======================================"
+              echo "DEPLOYMENT FAILED"
+              echo "Starting rollback..."
+              echo "======================================"
+
+              docker stop "$CONTAINER" 2>/dev/null || true
+              docker rm "$CONTAINER" 2>/dev/null || true
+
+              if [ -n "$OLD_IMAGE" ]; then
+                echo "Restoring previous image: $OLD_IMAGE"
+
+                docker pull "$OLD_IMAGE"
+
+                docker run -d \
+                  --name "$CONTAINER" \
+                  --restart unless-stopped \
+                  -p 80:5000 \
+                  "$OLD_IMAGE"
+
+                sleep 5
+
+                if curl --fail http://localhost/health; then
+                  echo "Rollback successful."
+                else
+                  echo "Rollback health check failed."
+                  exit 1
+                fi
+              else
+                echo "No previous image available for rollback."
+                exit 1
+              fi
+            }
 
             echo "Stopping old container..."
-            docker stop portfolio-project-3-api || true
+            docker stop "$CONTAINER" 2>/dev/null || true
 
             echo "Removing old container..."
-            docker rm portfolio-project-3-api || true
+            docker rm "$CONTAINER" 2>/dev/null || true
 
-            echo "Starting Project 3 version $VERSION..."
-            docker run -d \
-              --name portfolio-project-3-api \
+            echo "Starting new container..."
+            if ! docker run -d \
+              --name "$CONTAINER" \
               --restart unless-stopped \
               -p 80:5000 \
-              tholiwe/portfolio-project-3:$VERSION
+              "$NEW_IMAGE"; then
+
+              rollback
+              exit 1
+            fi
 
             echo "Waiting for application..."
             sleep 5
 
             echo "Running health check..."
-            curl --fail http://localhost/health
+
+            if ! curl --fail http://localhost/health; then
+              rollback
+              exit 1
+            fi
 
             echo "Checking deployed version..."
-            DEPLOYED_VERSION=$(curl --fail -s http://localhost/version)
 
-            echo "Application response:"
-            echo "$DEPLOYED_VERSION"
+            if ! curl --fail http://localhost/version; then
+              rollback
+              exit 1
+            fi
 
-            echo "Deployment of version $VERSION successful!"
+            echo "======================================"
+            echo "Deployment successful!"
+            echo "Running image: $NEW_IMAGE"
+            echo "======================================"
