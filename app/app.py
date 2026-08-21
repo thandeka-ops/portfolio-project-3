@@ -8,21 +8,21 @@ def home():
     return jsonify({
         "application": "CI/CD Demo Application",
         "status": "running",
-        "version": "3.0.2"
+        "version": "3.0.3"
     })
 
 
 @app.route("/health")
 def health():
     return jsonify({
-        "status": "healthy"
-    })
+        "status": "broken"
+    }), 500
 
 
 @app.route("/version")
 def version():
     return jsonify({
-        "version": "3.0.2"
+        "version": "3.0.3"
     })
 
 
