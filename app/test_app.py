@@ -7,15 +7,15 @@ def test_home():
 
     assert response.status_code == 200
     assert response.get_json()["application"] == "CI/CD Demo Application"
-    assert response.get_json()["version"] == "3.0.3"
+    assert response.get_json()["version"] == "3.0.4"
 
 
 def test_health():
     client = app.test_client()
     response = client.get("/health")
 
-    # Deliberately expect failure for rollback testing
-    assert response.status_code == 500
+    assert response.status_code == 200
+    assert response.get_json()["status"] == "healthy"
 
 
 def test_version():
@@ -23,4 +23,4 @@ def test_version():
     response = client.get("/version")
 
     assert response.status_code == 200
-    assert response.get_json()["version"] == "3.0.3"
+    assert response.get_json()["version"] == "3.0.4"
