@@ -53,6 +53,12 @@ jobs:
         id: version
         run: |
           VERSION=$(grep '"version"' app/app.py | head -1 | sed -E 's/.*"version": "([^"]+)".*/\1/')
+
+          if [ -z "$VERSION" ]; then
+            echo "Could not determine application version"
+            exit 1
+          fi
+
           echo "Application version: $VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
@@ -90,6 +96,105 @@ jobs:
 
     steps:
 
+      # ==========================================================
+      # GITHUB OIDC DIAGNOSTIC
+      # ==========================================================
+
+      - name: Debug GitHub OIDC claims
+        shell: bash
+        run: |
+          set -e
+
+          echo "======================================"
+          echo "GitHub OIDC diagnostic"
+          echo "======================================"
+
+          echo ""
+          echo "Repository:"
+          echo "$GITHUB_REPOSITORY"
+
+          echo ""
+          echo "Repository owner:"
+          echo "$GITHUB_REPOSITORY_OWNER"
+
+          echo ""
+          echo "Ref:"
+          echo "$GITHUB_REF"
+
+          echo ""
+          echo "Event:"
+          echo "$GITHUB_EVENT_NAME"
+
+          echo ""
+          echo "Requesting OIDC token..."
+
+          OIDC_RESPONSE=$(curl \
+            --fail \
+            --silent \
+            --show-error \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com")
+
+          printf '%s' "$OIDC_RESPONSE" | python -c '
+          import sys
+          import json
+          import base64
+
+          data = json.load(sys.stdin)
+
+          token = data["value"]
+
+          payload = token.split(".")[1]
+
+          payload += "=" * (-len(payload) % 4)
+
+          claims = json.loads(
+              base64.urlsafe_b64decode(payload).decode("utf-8")
+          )
+
+          print("")
+          print("OIDC sub:")
+          print(claims.get("sub", ""))
+
+          print("")
+          print("OIDC aud:")
+          print(claims.get("aud", ""))
+
+          print("")
+          print("Repository:")
+          print(claims.get("repository", ""))
+
+          print("")
+          print("Repository ID:")
+          print(claims.get("repository_id", ""))
+
+          print("")
+          print("Repository owner:")
+          print(claims.get("repository_owner", ""))
+
+          print("")
+          print("Repository owner ID:")
+          print(claims.get("repository_owner_id", ""))
+
+          print("")
+          print("Ref:")
+          print(claims.get("ref", ""))
+
+          print("")
+          print("Subject format:")
+          print("The value above is the exact sub claim AWS must trust.")
+          '
+
+          echo ""
+          echo "======================================"
+          echo "OIDC diagnostic complete"
+          echo "======================================"
+
+
+      # ==========================================================
+      # AWS OIDC LOGIN
+      # ==========================================================
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
@@ -97,9 +202,27 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: GitHubActionsProject3
 
+
+      # ==========================================================
+      # VERIFY AWS
+      # ==========================================================
+
       - name: Verify AWS identity
         run: |
+          echo "======================================"
+          echo "AWS identity"
+          echo "======================================"
+
           aws sts get-caller-identity
+
+          echo ""
+          echo "AWS Region:"
+          echo "$AWS_REGION"
+
+
+      # ==========================================================
+      # PREPARE DEPLOYMENT SCRIPT
+      # ==========================================================
 
       - name: Prepare deployment script
         env:
@@ -147,7 +270,7 @@ jobs:
 
           echo "Running health check..."
 
-          if curl --fail http://localhost/health; then
+          if curl --fail http://localhost:5000/health; then
 
             echo "======================================"
             echo "DEPLOYMENT SUCCESSFUL"
@@ -179,7 +302,7 @@ jobs:
 
             sleep 5
 
-            if curl --fail http://localhost/health; then
+            if curl --fail http://localhost:5000/health; then
 
               echo "======================================"
               echo "ROLLBACK SUCCESSFUL"
@@ -207,8 +330,13 @@ jobs:
           sed -i "s/__VERSION__/${VERSION}/g" deploy.sh
 
           echo "Deployment script prepared."
+
           grep '^VERSION=' deploy.sh
 
+
+      # ==========================================================
+      # SEND DEPLOYMENT THROUGH SSM
+      # ==========================================================
 
       - name: Send deployment command through SSM
         id: send-command
@@ -229,6 +357,10 @@ jobs:
 
           echo "command_id=$COMMAND_ID" >> "$GITHUB_OUTPUT"
 
+
+      # ==========================================================
+      # WAIT FOR DEPLOYMENT
+      # ==========================================================
 
       - name: Wait for deployment
         run: |
@@ -268,14 +400,24 @@ jobs:
           done
 
           echo "Deployment timed out waiting for SSM."
+
           exit 1
 
+
+      # ==========================================================
+      # SHOW DEPLOYMENT OUTPUT
+      # ==========================================================
 
       - name: Show deployment output
         if: always()
         run: |
 
           COMMAND_ID="${{ steps.send-command.outputs.command_id }}"
+
+          if [ -z "$COMMAND_ID" ]; then
+            echo "No SSM command ID available."
+            exit 0
+          fi
 
           echo "======================================"
           echo "SSM STANDARD OUTPUT"
