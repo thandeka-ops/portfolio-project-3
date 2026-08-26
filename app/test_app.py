@@ -7,7 +7,7 @@ def test_home():
 
     assert response.status_code == 200
     assert response.get_json()["application"] == "CI/CD Demo Application"
-    assert response.get_json()["version"] == "3.0.4"
+    assert response.get_json()["version"] == "3.0.5"
 
 
 def test_health():
@@ -23,4 +23,4 @@ def test_version():
     response = client.get("/version")
 
     assert response.status_code == 200
-    assert response.get_json()["version"] == "3.0.4"
+    assert response.get_json()["version"] == "3.0.5"
