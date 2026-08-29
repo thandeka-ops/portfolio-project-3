@@ -439,3 +439,53 @@ jobs:
             --instance-id "$EC2_INSTANCE_ID" \
             --query "StandardErrorContent" \
             --output text || true
+
+      - name: Verify live deployment
+        env:
+          EXPECTED_VERSION: ${{ needs.build-and-publish.outputs.version }}
+          SERVER_IP: ${{ secrets.EC2_HOST }}
+        run: |
+          echo "======================================"
+          echo "VERIFYING LIVE DEPLOYMENT"
+          echo "======================================"
+
+          echo "Expected version: $EXPECTED_VERSION"
+          echo "Server: $SERVER_IP"
+
+          echo "Checking health endpoint..."
+
+          HEALTH=$(curl --fail --retry 10 --retry-delay 2 \
+            "http://$SERVER_IP/health")
+
+          echo "Health response: $HEALTH"
+
+          echo "$HEALTH" | grep -q '"status":"healthy"'
+
+          echo "Health check passed."
+
+          echo "Checking live version..."
+
+          LIVE_VERSION=$(curl --fail --retry 10 --retry-delay 2 \
+            "http://$SERVER_IP/version" \
+            | python -c 'import json,sys; print(json.load(sys.stdin)["version"])')
+
+          echo "Live version: $LIVE_VERSION"
+
+          if [ "$LIVE_VERSION" = "$EXPECTED_VERSION" ]; then
+
+            echo "======================================"
+            echo "LIVE DEPLOYMENT VERIFIED"
+            echo "Version: $LIVE_VERSION"
+            echo "======================================"
+
+          else
+
+            echo "======================================"
+            echo "LIVE VERSION MISMATCH"
+            echo "Expected: $EXPECTED_VERSION"
+            echo "Actual:   $LIVE_VERSION"
+            echo "======================================"
+
+            exit 1
+
+          fi
