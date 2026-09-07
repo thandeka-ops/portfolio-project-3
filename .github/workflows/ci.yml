@@ -430,6 +430,7 @@ jobs:
             --output text || true
 
           echo ""
+
           echo "======================================"
           echo "SSM ERROR OUTPUT"
           echo "======================================"
@@ -440,20 +441,32 @@ jobs:
             --query "StandardErrorContent" \
             --output text || true
 
-            - name: Verify live deployment
+
+      # ==========================================================
+      # VERIFY LIVE HTTPS DEPLOYMENT
+      # ==========================================================
+
+      - name: Verify live deployment
         env:
           EXPECTED_VERSION: ${{ needs.build-and-publish.outputs.version }}
           DOMAIN: tholiwe.co.za
         run: |
+
           echo "======================================"
           echo "VERIFYING LIVE DEPLOYMENT"
           echo "======================================"
+
           echo "Expected version: $EXPECTED_VERSION"
           echo "Domain: https://$DOMAIN"
 
           echo "Checking HTTPS health endpoint..."
-          HEALTH=$(curl --fail --silent --show-error \
-            --retry 10 --retry-delay 2 \
+
+          HEALTH=$(curl \
+            --fail \
+            --silent \
+            --show-error \
+            --retry 10 \
+            --retry-delay 2 \
             "https://$DOMAIN/health")
 
           echo "Health response: $HEALTH"
@@ -464,23 +477,32 @@ jobs:
 
           echo "Checking live version..."
 
-          LIVE_VERSION=$(curl --fail --silent --show-error \
-            --retry 10 --retry-delay 2 \
+          LIVE_VERSION=$(curl \
+            --fail \
+            --silent \
+            --show-error \
+            --retry 10 \
+            --retry-delay 2 \
             "https://$DOMAIN/version" \
             | python -c 'import json,sys; print(json.load(sys.stdin)["version"])')
 
           echo "Live version: $LIVE_VERSION"
 
           if [ "$LIVE_VERSION" = "$EXPECTED_VERSION" ]; then
+
             echo "======================================"
             echo "LIVE DEPLOYMENT VERIFIED"
             echo "Version: $LIVE_VERSION"
             echo "======================================"
+
           else
+
             echo "======================================"
             echo "LIVE VERSION MISMATCH"
             echo "Expected: $EXPECTED_VERSION"
             echo "Actual:   $LIVE_VERSION"
             echo "======================================"
+
             exit 1
+
           fi
