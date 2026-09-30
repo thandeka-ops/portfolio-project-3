@@ -1,4 +1,4 @@
-# 🚀 Project 3 — Production CI/CD & AWS Monitoring
+#  Project 3 — Production CI/CD & AWS Monitoring
 
 A production-style Python Flask application demonstrating a complete DevOps workflow from source code to automated testing, Docker image publishing, AWS deployment, HTTPS verification, monitoring, and alerting.
 
@@ -6,7 +6,7 @@ The project demonstrates how a code change can move through an automated CI/CD p
 
 ---
 
-## 🎯 Project Overview
+##  Project Overview
 
 This project demonstrates a production-oriented DevOps workflow where changes pushed to the `main` branch are:
 
